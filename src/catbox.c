@@ -14,6 +14,8 @@
 #include <fcntl.h>
 #include <linux/unistd.h>
 
+#include "python_macros.h"
+
 static char doc_catbox[] = "Simple and fast sandboxing module.";
 static char doc_run[] = "Run given function in a sandbox.\n"
 "\n"
@@ -50,10 +52,15 @@ static char doc_canonical[] = "Resolve and simplify given path.\n"
 "    Everything except path are optional. Return value is the resolved\n"
 "    path string.";
 
+// static PyObject *
+// catbox_version(PyObject *self)
+// {
+// return PY_STRING_FROM_STRING(CATBOX_VERSION());
+// }
 static PyObject *
-catbox_version(PyObject *self)
+catbox_version(PyObject *self, PyObject *ignored)
 {
-return PyString_FromString(CATBOX_VERSION());
+return PY_STRING_FROM_STRING(CATBOX_VERSION());
 }
 
 static PyObject *
@@ -119,11 +126,11 @@ catbox_run(PyObject *self, PyObject *args, PyObject *kwargs)
 				PyObject *callable = PyList_GetItem(callables, index);
 				if (!PyCallable_Check(callable)) {
 					PyObject *hook_name = PyList_GetItem(hook_names, index);
-					PyObject *error_string = PyString_FromFormat(
+					PyObject *error_string = PY_STRING_FROM_FORMAT(
 												 "Event hook %s should be a callable function",
-												 PyString_AsString(hook_name)
+												 PY_STRING_AS_STRING(hook_name)
 											 );
-					PyErr_SetString(PyExc_TypeError, PyString_AsString(error_string));
+					PyErr_SetString(PyExc_TypeError, PY_STRING_AS_STRING(error_string));
 					return NULL;
 				}
 			}
@@ -198,20 +205,41 @@ catbox_canonical(PyObject *self, PyObject *args, PyObject *kwargs)
 		return NULL;
 	}
 
-	ret = PyString_FromString(canonical);
+	ret = PY_STRING_FROM_STRING(canonical);
 	return ret;
 }
 
 static PyMethodDef methods[] = {
 	{ "run", (PyCFunction) catbox_run, METH_VARARGS | METH_KEYWORDS, doc_run },
 	{ "canonical", (PyCFunction) catbox_canonical, METH_VARARGS | METH_KEYWORDS, doc_canonical },
-	{ "version", (PyCFunction) catbox_version, 0, NULL },
-	{ "has_pcre", (PyCFunction) catbox_has_pcre, 0, NULL },
+	// { "version", (PyCFunction) catbox_version, 0, NULL },
+	{ "version", (PyCFunction) catbox_version, METH_NOARGS, NULL },
+	// { "has_pcre", (PyCFunction) catbox_has_pcre, 0, NULL },
+	{ "has_pcre", (PyCFunction) catbox_has_pcre, METH_NOARGS, NULL },
 	{ NULL, NULL, 0, NULL }
 };
+
+#if PY_MAJOR_VERSION >= 3
+
+static struct PyModuleDef module = {
+	PyModuleDef_HEAD_INIT,
+	"catbox",
+	doc_catbox,
+	-1,
+	methods
+};
+
+PyMODINIT_FUNC PyInit_catbox(void)
+{
+	return PyModule_Create(&module);
+}
+
+#else
 
 PyMODINIT_FUNC
 initcatbox(void)
 {
 	Py_InitModule3("catbox", methods, doc_catbox);
 }
+
+#endif

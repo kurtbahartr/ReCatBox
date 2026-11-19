@@ -13,6 +13,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "python_macros.h"
+
+
 #ifdef ENABLE_PCRE
 #include <pcre.h>
 static int
@@ -206,7 +209,7 @@ make_pathlist(PyObject *paths)
 			free_pathlist(pathlist);
 			return NULL;
 		}
-		str = PyString_AsString(item);
+		str = PY_STRING_AS_STRING(item);
 		if (!str) {
 			Py_DECREF(item);
 			free_pathlist(pathlist);

@@ -18,6 +18,7 @@ import testify as T
 
 import catbox
 
+
 class ChildDidNotReportBackException(Exception):
     pass
 
@@ -37,7 +38,7 @@ def is_process_alive(pid):
         # Sending the null signal (sig. 0) to the process will check
         # pid's validity.
         os.kill(pid, 0)
-    except OSError, e:
+    except OSError as e:
         # Access denied, but process is alive
         return e.errno == errno.EPERM
     except:
@@ -45,11 +46,12 @@ def is_process_alive(pid):
     else:
         return True
 
+
 def child_processes(parent_pid):
     ps = subprocess.Popen(
         "ps -o pid --ppid %d --noheaders" % parent_pid,
         shell=True,
-        stdout=subprocess.PIPE
+        stdout=subprocess.PIPE,
     )
     out = ps.stdout.read()
     ps.wait()
@@ -72,7 +74,13 @@ class BaseTestCase(T.TestCase):
 
         def child_function():
             os.close(self.read_pipe)
-            os.write(self.write_pipe, self.default_expected_message_from_child)
+            if sys.version_info.major == 2:
+                os.write(self.write_pipe, self.default_expected_message_from_child)
+            else:
+                os.write(
+                    self.write_pipe,
+                    self.default_expected_message_from_child.encode("utf-8"),
+                )
 
         self.default_child_function = child_function
 
@@ -88,7 +96,7 @@ class BaseTestCase(T.TestCase):
             pass
 
     def poll(self):
-        events = self.epoll.poll(.1)
+        events = self.epoll.poll(0.1)
         if events:
             first_event = events[0]
             read_fd = first_event[0]
@@ -99,7 +107,7 @@ class BaseTestCase(T.TestCase):
         expected_message = expected_message or self.default_expected_message_from_child
         actual_message_from_child = self.poll()
         if actual_message_from_child:
-            T.assert_in(expected_message, actual_message_from_child)
+            T.assert_in(expected_message.encode("utf-8"), actual_message_from_child)
         else:
             raise ChildDidNotReportBackException
 

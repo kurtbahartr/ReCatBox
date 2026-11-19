@@ -13,11 +13,11 @@ import sys
 import subprocess
 import time
 
-import testing
+from tests import testing
 import testify as T
 
-class ProcessManagementTestCase(testing.BaseTestCase):
 
+class ProcessManagementTestCase(testing.BaseTestCase):
     def test_child(self):
         """catbox.run will fork(). Child process will execute
         self.child_function. This test verifies that child is actually
@@ -37,31 +37,50 @@ class ProcessManagementTestCase(testing.BaseTestCase):
             self.run_child_function_in_catbox(lazy_child)
             self.verify_message_from_child()
 
-
     def test_subprocess_kill(self):
         """Verify that killing the subprocess in the forked process
         will not have side effects on catbox.
         """
+
         def child_calling_subprocess_kill():
             sleep_time = 5
             start_time = time.time()
-            sub = subprocess.Popen(['/bin/sleep', '%d' % sleep_time], stdout=subprocess.PIPE)
+            sub = subprocess.Popen(
+                ["/bin/sleep", "%d" % sleep_time], stdout=subprocess.PIPE
+            )
             sub.kill()
             sub.wait()
             elapsed_time = time.time() - start_time
             assert elapsed_time < sleep_time
-            os.write(self.write_pipe, self.default_expected_message_from_child)
+
+            if sys.version_info.major == 2:
+                os.write(self.write_pipe, self.default_expected_message_from_child)
+            else:
+                os.write(
+                    self.write_pipe,
+                    self.default_expected_message_from_child.encode("utf-8"),
+                )
 
         self.run_child_function_in_catbox(child_function=child_calling_subprocess_kill)
         self.verify_message_from_child()
 
     def test_many_short_lived_subprocesses(self):
         """Stress fork/exit handling with short-lived subprocesses."""
+
         def child_spawning_many_short_lived_subprocesses():
             for _ in range(200):
-                sub = subprocess.Popen(['/bin/true'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                sub = subprocess.Popen(
+                    ["/bin/true"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
                 sub.wait()
-            os.write(self.write_pipe, self.default_expected_message_from_child)
+
+            if sys.version_info.major == 2:
+                os.write(self.write_pipe, self.default_expected_message_from_child)
+            else:
+                os.write(
+                    self.write_pipe,
+                    self.default_expected_message_from_child.encode("utf-8"),
+                )
 
         self.run_child_function_in_catbox(
             child_function=child_spawning_many_short_lived_subprocesses
@@ -70,7 +89,6 @@ class ProcessManagementTestCase(testing.BaseTestCase):
 
 
 class WatchdogTestCase(testing.BaseTestCase):
-
     def test_watchdog(self):
         def sleeping_child_function():
             time.sleep(5)
@@ -82,34 +100,32 @@ class WatchdogTestCase(testing.BaseTestCase):
         # here and run catbox in the forked process to kill the catbox
         # parent prematurely.
         catbox_pid = os.fork()
-        if not catbox_pid: # catbox process
-            self.run_child_function_in_catbox(
-                child_function=sleeping_child_function
-            )
+        if not catbox_pid:  # catbox process
+            self.run_child_function_in_catbox(child_function=sleeping_child_function)
             assert False, "Shouldn't get here. Parent should kill us already."
             sys.exit(0)
         else:
             # wait for catbox and traced child to start up and
             # initialized. We're just sleeping enough for catbox
             # process to have a chance to start running.
-            time.sleep(.1)
+            time.sleep(0.1)
 
             child_processes = testing.child_processes(catbox_pid)
 
             # Killing catbox (parent) will trigger watchdog process
             # and it will kill the process group.
             os.kill(catbox_pid, signal.SIGKILL)
-            os.waitpid(catbox_pid, 0) # block waiting catbox_pid
+            os.waitpid(catbox_pid, 0)  # block waiting catbox_pid
 
         # testing.is_process_alive sends NULL signal to catbox
         # process. Although we kill the catbox process and wait for it
         # we were still able to send the signal. Waiting for a very
         # short amount of time helps with "process cleanup".
-        time.sleep(.1)
+        time.sleep(0.1)
         T.assert_equal(
             testing.is_process_alive(catbox_pid),
             False,
-            "Catbox process (%d) is still running" % catbox_pid
+            "Catbox process (%d) is still running" % catbox_pid,
         )
 
         for pid in child_processes:
@@ -117,5 +133,5 @@ class WatchdogTestCase(testing.BaseTestCase):
             T.assert_equal(
                 testing.is_process_alive(pid),
                 False,
-                "Child process (%d) is still running" % pid
+                "Child process (%d) is still running" % pid,
             )

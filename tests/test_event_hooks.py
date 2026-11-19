@@ -8,9 +8,14 @@
 #
 
 import os
+import sys
 import time
 
-import testing
+# if sys.version_info.major == 2:
+# import testing
+# else:
+from tests import testing
+
 import testify as T
 
 import catbox
@@ -21,29 +26,40 @@ class EventHooksTestCase(testing.BaseTestCase):
         self.run_child_function_in_catbox(event_hooks=None)
 
     def test_invalid_event_hooks(self):
-        event_hooks = {"child_initialized_hook" : "invalid_event_hook"}
+        event_hooks = {"child_initialized_hook": "invalid_event_hook"}
         with T.assert_raises(TypeError):
             self.run_child_function_in_catbox(event_hooks=event_hooks)
 
     def test_successful_child_initialized_hook(self):
         expected_message_from_init_function = "Init function is successful!"
-        def child_initialized_hook(child_pid):
-            os.write(self.write_pipe, expected_message_from_init_function)
 
-        event_hooks = {"child_initialized" : child_initialized_hook}
+        def child_initialized_hook(child_pid):
+            if sys.version_info.major == 2:
+                os.write(self.write_pipe, expected_message_from_init_function)
+            else:
+                os.write(
+                    self.write_pipe, expected_message_from_init_function.encode("utf-8")
+                )
+
+        event_hooks = {"child_initialized": child_initialized_hook}
         self.run_child_function_in_catbox(event_hooks=event_hooks)
+        # if sys.version_info.major == 2:
         self.verify_message_from_child(expected_message_from_init_function)
+        # else:
+        #     self.verify_message_from_child(
+        #         expected_message_from_init_function.encode("utf-8")
+        #     )
 
     def test_failing_child_initialized_hook(self):
         def child_initialized_hook(child_pid):
-            raise Exception, "child_initialized hook raises exception"
+            raise Exception("child_initialized hook raises exception")
 
         # When child_initialized hook fails parent process will
         # exit. To test a failing initilization hook we fork and watch
         # the new child.
         pid = os.fork()
         if not pid:
-            event_hooks = {"child_initialized" : child_initialized_hook}
+            event_hooks = {"child_initialized": child_initialized_hook}
             with testing.no_stderr():
                 # This will fail. redirecting stderr to /dev/null will
                 # silence the test output.
@@ -56,14 +72,12 @@ class EventHooksTestCase(testing.BaseTestCase):
                     (wait_pid, status, _) = os.wait4(pid, os.WNOHANG)
                     if wait_pid == pid:
                         break
-                    time.sleep(.1)
-            except OSError, e:
+                    time.sleep(0.1)
+            except OSError as e:
                 T.assert_in("No child processes", e)
             else:
                 T.assert_not_equal(
-                    status,
-                    0,
-                    "Failing child_initialized hook did not make parent exit"
+                    status, 0, "Failing child_initialized hook did not make parent exit"
                 )
 
     def test_catbox_run_with_no_event_hooks(self):
